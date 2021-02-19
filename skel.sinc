@@ -28,21 +28,32 @@ define token instr (32)
   opex_2 = (21, 25)
 
   f2_bitnumber = (11, 15)
+  
+  f6_imm         = (0, 15)
+
+  f7_condition_bits  = (23, 26)
+  f7_prediction_bit  = (22, 22)
+  f7_cc_select_bit   = (21, 21)
+  f7_soff            = (0, 20) signed
 
   f8_value_21_23 = (24, 26)
   f8_value_0_20  = (0, 20)
   f8_a           = (21, 23)
 
-  f6_imm         = (0, 15)
 ;
 
 attach variables [ f8_a d_register s1_register ] [ A0 A1 A2 A3 A4 A5 A6 SP ];
 attach variables [ d_data_register ] [ D0 D1 D2 D3 D4 D5 D6 D7 D8 D9 D10 D11 D12 D13 D14 D15 ];
 
-@define N       "CSR[7, 1]"  # N: Negative result (twos complement)
-@define Z       "CSR[6, 1]"  # Z: Zero result
-@define V       "CSR[5, 1]"  # V: Overflow flag
-@define C       "CSR[4, 1]"  # C: Carry (or borrow) flag
+@define N32       "CSR[7, 1]"  # N: Negative result (twos complement)
+@define Z32       "CSR[6, 1]"  # Z: Zero result
+@define V32       "CSR[5, 1]"  # V: Overflow flag
+@define C32       "CSR[4, 1]"  # C: Carry (or borrow) flag
+
+@define N16       "CSR[3, 1]"  # N: Negative result (twos complement)
+@define Z16       "CSR[2, 1]"  # Z: Zero result
+@define V16       "CSR[1, 1]"  # V: Overflow flag
+@define C16       "CSR[0, 1]"  # C: Carry (or borrow) flag
 
 @define IS_D_REGISTER "d_mode=1 & d_8bitdirect"
 @define IS_D_IMM      "d_mode=0 & d_8bitsigned"
@@ -127,6 +138,49 @@ with s1: s1_register_offset=0 {
   : val                             is $(IS_S1_REGISTER) [ val = s1_8bitdirect << 2; ]  { export *[register]:4 val; } # Register "A5", EA is not defined, so I export the value itself
 }
 
+# #####################################
+# ###          Conditions          ###
+# #####################################
+
+# CC 32
+with cc32 : f7_cc_select_bit=1 {
+  : "F"     is f7_condition_bits=0x0 { c:1 = 0x0; export c; }
+  : "CC"    is f7_condition_bits=0x1 { c:1 = ($(C32) == 0); export c; }
+  : "CS"    is f7_condition_bits=0x2 { c:1 = ($(C32) == 1); export c; }
+  : "EQ"    is f7_condition_bits=0x3 { c:1 = ($(Z32) == 1); export c; }
+  : "GE"    is f7_condition_bits=0x4 { c:1 = ((($(N32) == 1) & ($(V32) == 1)) | (($(N32) == 0) & ($(V32) == 0))); export c; }
+  : "GT"    is f7_condition_bits=0x5 { c:1 = ((($(N32) == 1) & ($(V32) == 1) & ($(Z32) == 0)) | (($(N32) == 0) & ($(V32) == 0) & ($(Z32) == 0))); export c; }
+  : "HI"    is f7_condition_bits=0x6 { c:1 = (($(C32) == 1) & ($(Z32) == 0)); export c; }
+  : "LE"    is f7_condition_bits=0x7 { c:1 = (($(Z32) == 1) | (($(N32) == 1) & ($(V32) == 0)) | (($(N32) == 0) & ($(V32) == 1))); export c; }
+  : "LS"    is f7_condition_bits=0x8 { c:1 = (($(C32) == 0) | ($(Z32) == 1)); export c; }
+  : "LT"    is f7_condition_bits=0x9 { c:1 = ((($(N32) == 1) & ($(Z32) == 0)) | (($(N32) == 0) & ($(V32) == 1))); export c; }
+  : "MI"    is f7_condition_bits=0xA { c:1 = ($(N32) == 1); export c; }
+  : "NE"    is f7_condition_bits=0xB { c:1 = ($(Z32) == 0); export c; }
+  : "PL"    is f7_condition_bits=0xC { c:1 = ($(N32) == 0); export c; }
+  : "T"     is f7_condition_bits=0xD { c:1 = 0x1; export c; }
+  : "VC"    is f7_condition_bits=0xE { c:1 = ($(V32) == 0); export c; }
+  : "VS"    is f7_condition_bits=0xF { c:1 = ($(V32) == 1); export c; }
+}
+
+# CC 16
+with cc16 : f7_cc_select_bit=0 {
+  : "F"     is f7_condition_bits=0x0 { c:1 = 0x0; export c; }
+  : "CC"    is f7_condition_bits=0x1 { c:1 = ($(C16) == 0); export c; }
+  : "CS"    is f7_condition_bits=0x2 { c:1 = ($(C16) == 1); export c; }
+  : "EQ"    is f7_condition_bits=0x3 { c:1 = ($(Z16) == 1); export c; }
+  : "GE"    is f7_condition_bits=0x4 { c:1 = ((($(N16) == 1) & ($(V16) == 1)) | (($(N16) == 0) & ($(V16) == 0))); export c; }
+  : "GT"    is f7_condition_bits=0x5 { c:1 = ((($(N16) == 1) & ($(V16) == 1) & ($(Z16) == 0)) | (($(N16) == 0) & ($(V16) == 0) & ($(Z16) == 0))); export c; }
+  : "HI"    is f7_condition_bits=0x6 { c:1 = (($(C16) == 1) & ($(Z16) == 0)); export c; }
+  : "LE"    is f7_condition_bits=0x7 { c:1 = (($(Z16) == 1) | (($(N16) == 1) & ($(V16) == 0)) | (($(N16) == 0) & ($(V16) == 1))); export c; }
+  : "LS"    is f7_condition_bits=0x8 { c:1 = (($(C16) == 0) | ($(Z16) == 1)); export c; }
+  : "LT"    is f7_condition_bits=0x9 { c:1 = ((($(N16) == 1) & ($(Z16) == 0)) | (($(N16) == 0) & ($(V16) == 1))); export c; }
+  : "MI"    is f7_condition_bits=0xA { c:1 = ($(N16) == 1); export c; }
+  : "NE"    is f7_condition_bits=0xB { c:1 = ($(Z16) == 0); export c; }
+  : "PL"    is f7_condition_bits=0xC { c:1 = ($(N16) == 0); export c; }
+  : "T"     is f7_condition_bits=0xD { c:1 = 0x1; export c; }
+  : "VC"    is f7_condition_bits=0xE { c:1 = ($(V16) == 0); export c; }
+  : "VS"    is f7_condition_bits=0xF { c:1 = ($(V16) == 1); export c; }
+}
 
 # MOVE.4 d, s1
 with : opcode=0x00 & opex_1=0x0C {
@@ -146,26 +200,30 @@ with : opcode=0x00 & opex_1=0x1C {
 # BSET, d, s1, #bitnumber
 with : opcode=0x04 {
   :BSET d, s1, #f2_bitnumber   is d & s1 & f2_bitnumber & $(IS_D_REGISTER) & $(IS_S1_IMM) { 
-    $(Z) = ((s1:4 & (1 << f2_bitnumber)) == 0);
+    $(Z32) = ((s1:4 & (1 << f2_bitnumber)) == 0);
     d = d:4 & (1 << f2_bitnumber);
   }
   :BSET d, s1, #f2_bitnumber   is d & s1 & f2_bitnumber & $(IS_D_REGISTER) { 
-    $(Z) = ((*:4 s1:4 & (1 << f2_bitnumber)) == 0);
+    $(Z32) = ((*:4 s1:4 & (1 << f2_bitnumber)) == 0);
     d = d:4 & (1 << f2_bitnumber);
   }
   :BSET d, s1, #f2_bitnumber   is d & s1 & f2_bitnumber & $(IS_S1_IMM) { 
-    $(Z) = ((s1:4 & (1 << f2_bitnumber)) == 0);
+    $(Z32) = ((s1:4 & (1 << f2_bitnumber)) == 0);
     *:4 d = *:4 d:4 & (1 << f2_bitnumber);
   }
   :BSET d, s1, #f2_bitnumber   is d & s1 & f2_bitnumber{ 
-    $(Z) = ((*:4 s1:4 & (1 << f2_bitnumber)) == 0);
+    $(Z32) = ((*:4 s1:4 & (1 << f2_bitnumber)) == 0);
     *:4 d = *:4 d:4 & (1 << f2_bitnumber);
   }
 }
 
-#JMP<cc>
+#JMP<cc>.P.C offset
+f8_dest: rel is f7_soff [ rel = inst_next + (f7_soff << 2); ] { export *:4 rel; }
 with : opcode=0x1A {
-  
+  :JMP^cc16".S.T" f8_dest     is f8_dest & cc16 & f7_cc_select_bit=0 & f7_prediction_bit=1 { if(cc16) goto f8_dest; }
+  :JMP^cc16".S.F" f8_dest     is f8_dest & cc16 & f7_cc_select_bit=0 & f7_prediction_bit=0 { if(cc16) goto f8_dest; }
+  :JMP^cc32".W.T" f8_dest     is f8_dest & cc32 & f7_cc_select_bit=1 & f7_prediction_bit=1 { if(cc32) goto f8_dest; }
+  :JMP^cc32".W.F" f8_dest     is f8_dest & cc32 & f7_cc_select_bit=1 & f7_prediction_bit=0 { if(cc32) goto f8_dest; }
 }
 
 
