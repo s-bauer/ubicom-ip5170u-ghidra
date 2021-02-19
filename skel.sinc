@@ -1,0 +1,481 @@
+define token instr (32)
+  opcode = (27, 31)
+  
+  d_register_offset = (26, 26)
+  d_imm_5_6         = (24, 25)
+  d_register        = (21, 23)
+  d_imm_0_4         = (16, 20)
+  d_mode            = (24, 25)
+  d_8bitdirect      = (16, 23)
+  d_8bitsigned      = (16, 23) signed
+  d_data_register   = (16, 19)
+  d_inc_mode        = (20, 20)
+  d_imm_signed      = (16, 19) signed
+
+  s1_register_offset = (10, 10)
+  s1_imm_5_6         = (8, 9)
+  s1_register        = (5, 7)
+  s1_imm_0_4         = (0, 4)
+  s1_mode            = (8, 9)
+  s1_8bitdirect      = (0, 7)
+  s1_8bitsigned      = (0, 7) signed
+  s1_data_register   = (0, 3)
+  s1_inc_mode        = (4, 4)
+  s1_imm_signed      = (0, 3) signed
+
+
+  opex_1 = (11, 15)
+  opex_2 = (21, 25)
+
+  f2_bitnumber = (11, 15)
+
+  f8_value_21_23 = (24, 26)
+  f8_value_0_20  = (0, 20)
+  f8_a           = (21, 23)
+
+  f6_imm         = (0, 15)
+;
+
+attach variables [ f8_a d_register s1_register ] [ A0 A1 A2 A3 A4 A5 A6 SP ];
+attach variables [ d_data_register ] [ D0 D1 D2 D3 D4 D5 D6 D7 D8 D9 D10 D11 D12 D13 D14 D15 ];
+
+@define N       "CSR[7, 1]"  # N: Negative result (twos complement)
+@define Z       "CSR[6, 1]"  # Z: Zero result
+@define V       "CSR[5, 1]"  # V: Overflow flag
+@define C       "CSR[4, 1]"  # C: Carry (or borrow) flag
+
+@define IS_D_REGISTER "d_mode=1 & d_8bitdirect"
+@define IS_D_IMM      "d_mode=0 & d_8bitsigned"
+
+@define IS_S1_REGISTER "s1_mode=1 & s1_8bitdirect"
+@define IS_S1_IMM      "s1_mode=0 & s1_8bitsigned"
+
+@define OP_2BYTE "opcode=0x0E | opcode=0x18 | opcode=0x0A | opcode=0x11 | opcode=0x0C | opcode=0x19 | (opcode=0x00 & ( opex_1=0x15 | opex_1=0x1D | opex_1=0x0D | opex_1=0x0B )) | (opcode=0x02 & ( opex_2=0x15 | opex_2=0x11 | opex_2=0x13 | opex_2=0x1E ))"
+@define OP_1BYTE "(opcode=0x00 & ( opex_1=0x1F | opex_1=0x17 | opex_1=0x0F )) | (opcode=0x02 & ( opex_2=0x08 | opex_2=0x1F ))"
+
+# #####################################
+# ###          Destination          ###
+# #####################################
+
+# Indirect with Offset "offset(An)"
+with d : d_register_offset=1 {
+  : offset(d_register) is d_register & d_imm_0_4 & d_imm_5_6                 [ offset = ((d_imm_5_6 << 5) + d_imm_0_4) << 2; ] { ptr:4 = d_register + zext(offset:2); export ptr; }
+  : offset(d_register) is d_register & d_imm_0_4 & d_imm_5_6 & $(OP_2BYTE)   [ offset = ((d_imm_5_6 << 5) + d_imm_0_4) << 1; ] { ptr:4 = d_register + zext(offset:2); export ptr; }
+  : offset(d_register) is d_register & d_imm_0_4 & d_imm_5_6 & $(OP_1BYTE)   [ offset = (d_imm_5_6 << 5) + d_imm_0_4; ]        { ptr:4 = d_register + zext(offset:2); export ptr; }
+}
+
+# Indirect with Post-Increment "(A5)2++"
+with d : d_register_offset=0 & d_mode=2 & d_inc_mode=0 {
+  : (d_register)val++            is d_register & d_imm_signed                 [ val = d_imm_signed << 2; ] { ptr:4 = d_register; d_register = d_register + val;          export ptr; }
+  : (d_register)val++            is d_register & d_imm_signed & $(OP_2BYTE)   [ val = d_imm_signed << 1; ] { ptr:4 = d_register; d_register = d_register + val;          export ptr; }
+  : (d_register)d_imm_signed++   is d_register & d_imm_signed & $(OP_1BYTE)                                { ptr:4 = d_register; d_register = d_register + d_imm_signed; export ptr; }
+}
+
+# Indirect with Pre-Increment  "2(A5)++"
+with d : d_register_offset=0 & d_mode=2 & d_inc_mode=1 {
+  : val(d_register)++            is d_register & d_imm_signed                 [ val = d_imm_signed << 2; ] { d_register = d_register + val;          export d_register; }
+  : val(d_register)++            is d_register & d_imm_signed & $(OP_2BYTE)   [ val = d_imm_signed << 1; ] { d_register = d_register + val;          export d_register; }
+  : d_imm_signed(d_register)++   is d_register & d_imm_signed & $(OP_1BYTE)                                { d_register = d_register + d_imm_signed; export d_register; }
+}
+
+# Indirect with index "(A5,D2)"
+with d : d_register_offset=0 & d_mode=3 {
+  : (d_register, d_data_register)  is d_register & d_data_register               { ptr:4 = d_register + (d_data_register << 2); export ptr; }
+  : (d_register, d_data_register)  is d_register & d_data_register & $(OP_2BYTE) { ptr:4 = d_register + (d_data_register << 1); export ptr; }
+  : (d_register, d_data_register)  is d_register & d_data_register & $(OP_1BYTE) { ptr:4 = d_register + d_data_register       ; export ptr; }
+}
+
+with d: d_register_offset=0 {
+  : "#"d_8bitsigned                 is d_mode=0 & d_8bitsigned { tmp:4 = sext(d_8bitsigned:1); export tmp; }         # Immediate Value "#0x00", EA is value
+  : val                             is $(IS_D_REGISTER) [ val = d_8bitdirect << 2; ]  { export *[register]:4 val; }  # Register "A5", EA is not defined, so I export the value itself
+}
+
+# #####################################
+# ###          Source          ###
+# #####################################
+
+# Indirect with Offset "offset(An)"
+with s1 : s1_register_offset=1 {
+  : offset(s1_register) is s1_register & s1_imm_0_4 & s1_imm_5_6                 [ offset = ((s1_imm_5_6 << 5) + s1_imm_0_4) << 2; ] { tmp:4 = zext(offset:2); ptr:4 = s1_register + tmp; export ptr; }
+  : offset(s1_register) is s1_register & s1_imm_0_4 & s1_imm_5_6 & $(OP_2BYTE)   [ offset = ((s1_imm_5_6 << 5) + s1_imm_0_4) << 1; ] { tmp:4 = zext(offset:2); ptr:4 = s1_register + tmp; export ptr; }
+  : offset(s1_register) is s1_register & s1_imm_0_4 & s1_imm_5_6 & $(OP_1BYTE)   [ offset = (s1_imm_5_6 << 5) + s1_imm_0_4; ]        { tmp:4 = zext(offset:2); ptr:4 = s1_register + tmp; export ptr; }
+}
+
+# Indirect with Post-Increment "(A5)2++"
+with s1 : s1_register_offset=0 & s1_mode=2 & s1_inc_mode=0 {
+  : (s1_register)val++            is s1_register & s1_imm_signed                 [ val = s1_imm_signed << 2; ] { ptr:4 = s1_register; s1_register = s1_register + val;           export ptr; }
+  : (s1_register)val++            is s1_register & s1_imm_signed & $(OP_2BYTE)   [ val = s1_imm_signed << 1; ] { ptr:4 = s1_register; s1_register = s1_register + val;           export ptr; }
+  : (s1_register)s1_imm_signed++  is s1_register & s1_imm_signed & $(OP_1BYTE)                                 { ptr:4 = s1_register; s1_register = s1_register + s1_imm_signed; export ptr; }
+}
+
+# Indirect with Pre-Increment  "2(A5)++"
+with s1 : s1_register_offset=0 & s1_mode=2 & s1_inc_mode=1 {
+  : val(s1_register)++            is s1_register & s1_imm_signed                 [ val = s1_imm_signed << 2; ] { s1_register = s1_register + val;           export s1_register; }
+  : val(s1_register)++            is s1_register & s1_imm_signed & $(OP_2BYTE)   [ val = s1_imm_signed << 1; ] { s1_register = s1_register + val;           export s1_register; }
+  : s1_imm_signed(s1_register)++  is s1_register & s1_imm_signed & $(OP_1BYTE)                                 { s1_register = s1_register + s1_imm_signed; export s1_register; }
+}
+
+# Indirect with index "(A5,D2)"
+with s1 : s1_register_offset=0 & s1_mode=3 {
+  : (s1_register, s1_data_register)  is s1_register & s1_data_register               { ptr:4 = s1_register + (s1_data_register << 2); export ptr; }
+  : (s1_register, s1_data_register)  is s1_register & s1_data_register & $(OP_2BYTE) { ptr:4 = s1_register + (s1_data_register << 1); export ptr; }
+  : (s1_register, s1_data_register)  is s1_register & s1_data_register & $(OP_1BYTE) { ptr:4 = s1_register + s1_data_register       ; export ptr; }
+}
+
+with s1: s1_register_offset=0 {
+  : "#"s1_8bitsigned                is s1_mode=0 & s1_8bitsigned { tmp:4 = sext(s1_8bitsigned:1); export tmp; }       # Immediate Value "#0x00", EA is value
+  : val                             is $(IS_S1_REGISTER) [ val = s1_8bitdirect << 2; ]  { export *[register]:4 val; } # Register "A5", EA is not defined, so I export the value itself
+}
+
+
+# MOVE.4 d, s1
+with : opcode=0x00 & opex_1=0x0C {
+  :MOVE.4 d, s1   is d & s1 & $(IS_D_REGISTER) & $(IS_S1_IMM) { d = s1:4; }
+  :MOVE.4 d, s1   is d & s1 & $(IS_D_REGISTER)                { d = *:4 s1:4; }
+  :MOVE.4 d, s1   is d & s1 & $(IS_S1_IMM)                    { *:4 d:4 = s1:4; }
+  :MOVE.4 d, s1   is d & s1                                   { *:4 d:4 = *:4 s1:4; }
+}
+
+
+# LEA.4 d, s1
+with : opcode=0x00 & opex_1=0x1C {
+  :LEA.4 d, s1    is d & s1 & $(IS_D_REGISTER)              { d = s1:4; }
+  :LEA.4 d, s1    is d & s1                                 { *:4 d:4 = s1:4; }
+}
+
+# BSET, d, s1, #bitnumber
+with : opcode=0x04 {
+  :BSET d, s1, #f2_bitnumber   is d & s1 & f2_bitnumber & $(IS_D_REGISTER) & $(IS_S1_IMM) { 
+    $(Z) = ((s1:4 & (1 << f2_bitnumber)) == 0);
+    d = d:4 & (1 << f2_bitnumber);
+  }
+  :BSET d, s1, #f2_bitnumber   is d & s1 & f2_bitnumber & $(IS_D_REGISTER) { 
+    $(Z) = ((*:4 s1:4 & (1 << f2_bitnumber)) == 0);
+    d = d:4 & (1 << f2_bitnumber);
+  }
+  :BSET d, s1, #f2_bitnumber   is d & s1 & f2_bitnumber & $(IS_S1_IMM) { 
+    $(Z) = ((s1:4 & (1 << f2_bitnumber)) == 0);
+    *:4 d = *:4 d:4 & (1 << f2_bitnumber);
+  }
+  :BSET d, s1, #f2_bitnumber   is d & s1 & f2_bitnumber{ 
+    $(Z) = ((*:4 s1:4 & (1 << f2_bitnumber)) == 0);
+    *:4 d = *:4 d:4 & (1 << f2_bitnumber);
+  }
+}
+
+#JMP<cc>
+with : opcode=0x1A {
+  
+}
+
+
+
+
+
+with : opcode=0x00 {
+  :SUSPEND          is opex_1=0x01 {}
+  :RET s1           is opex_1=0x04 & s1 { return [s1]; }
+  :BKPT             is opex_1=0x07 {}
+  :NOT.4            is opex_1=0x0A {}
+  :NOT.2            is opex_1=0x0B {}
+  :MOVE.2 d, s1     is opex_1=0x0D & d & s1 { *:2 d = s1; }
+  :MOVE.1 d, s1     is opex_1=0x0F & d & s1 { *:1 d = s1;}
+  :MOVEA            is opex_1=0x0E {}
+  :SETCSR           is opex_1=0x12 {}
+  :EXT.2            is opex_1=0x15 {}
+  :EXT.1            is opex_1=0x17 {}
+  :LEA.2 d,s1       is opex_1=0x1D & d & s1 { *:2 d = &s1;  }
+  :LEA.1 d,s1       is opex_1=0x1F & d & s1 { *:1 d = &s1;  }
+  :PDEC             is opex_1=0x1E & d & s1 {}
+}
+
+
+
+:BCLR       is opcode=0x05 {}
+
+:AND.2      is opcode=0x08 {}
+:AND.4      is opcode=0x09 {}
+:OR.2       is opcode=0x0A {}
+:OR.4       is opcode=0x0B {}
+:XOR.2      is opcode=0x0C {}
+:XOR.4      is opcode=0x0D {}
+:ADD.2      is opcode=0x0E {}
+:ADD.4      is opcode=0x0F {}
+:ADDC       is opcode=0x10 {}
+:SUB.2      is opcode=0x11 {}
+:SUB.4      is opcode=0x12 {}
+:SUBC       is opcode=0x13 {}
+
+with : opcode=0x02 {
+  :BTST       is opex_2=0x06 {}
+  :CRCGEN     is opex_2=0x08 {}
+  :LSL.4      is opex_2=0x10 {}
+  :LSL.2      is opex_2=0x11 {}
+  :LSR.4      is opex_2=0x12 {}
+  :LSR.2      is opex_2=0x13 {}
+  :ASR.4      is opex_2=0x14 {}
+  :ASR.2      is opex_2=0x15 {}
+  :BFEXTU     is opex_2=0x16 {}
+  :BFRVRS     is opex_2=0x18 {}
+  :SHFTD      is opex_2=0x1A {}
+  :MERGE      is opex_2=0x1C {}
+  :SHMRG.2    is opex_2=0x1E {}
+  :SHMRG.1    is opex_2=0x1F {}
+}
+
+:CMPI       is opcode=0x18 {}
+
+
+:CALLI      is opcode=0x1E {}
+
+
+# MOVEI (Format 6)
+
+with : opcode=0x19 {
+  :MOVEI d, #f6_imm   is d & f6_imm & $(IS_D_REGISTER) { d = sext(f6_imm:2); }
+  :MOVEI d, #f6_imm   is d & f6_imm                    { *:4 d = f6_imm:2; }
+}
+
+# MOVEAI (Format 8)
+
+f8_value: "#"calc_addr  is opcode=0x1C & f8_value_21_23 & f8_value_0_20  [ calc_addr = (f8_value_21_23 << 28) + (f8_value_0_20 << 7); ] { export calc_addr; }
+:MOVEAI f8_a,f8_value   is opcode=0x1C & f8_a & f8_value { f8_a = f8_value; }
+
+
+# CALL (Format 8)
+
+f8_value: "#"offset     is opcode=0x1B & f8_value_21_23 & f8_value_0_20 [ offset = inst_start + (((f8_value_21_23 << 20) + f8_value_0_20) << 2); ] { export *:4 offset; }
+:CALL   f8_a,f8_value   is opcode=0x1B & f8_a & f8_value { f8_a = inst_next; call [f8_value]; }
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+# define token opbyte (8)
+#    op0_8     = (0,7)
+#    op6_2     = (6,7)
+   
+#    dRegPair4_2    = (4,5)
+#    pRegPair4_2    = (4,5)
+#    sRegPair4_2    = (4,5)
+#    qRegPair4_2    = (4,5)
+#    qRegPair4_2a   = (4,5)
+#    qRegPair4_2b   = (4,5)
+#    rRegPair4_2    = (4,5)
+
+#    reg3_3 = (3,5)
+#    bits3_3   = (3,5)
+   
+#    bits0_4   = (0,3)
+   
+#    reg0_3 = (0,2)
+#    bits0_3   = (0,2)
+# ;
+
+# define token data8 (8)
+#    imm8		= (0,7)
+#    sign8	= (7,7)
+#    simm8	= (0,7) signed
+# ;
+
+# define token data16 (16)
+#    timm4        = (12,15)
+#    imm16        = (0,15)
+#    sign16		= (15,15)
+#    simm16		= (0,15) signed
+# ;
+
+# attach variables [ reg0_3 reg3_3 ] [ B C D E H L _ A ];
+
+# attach variables [ sRegPair4_2 dRegPair4_2 ] [ BC DE HL SP ];
+
+# attach variables [ qRegPair4_2 ] [ BC DE HL AF ];
+# attach variables [ qRegPair4_2a ] [ B D H A ];
+# attach variables [ qRegPair4_2b ] [ C E L F ];
+
+# attach variables [ pRegPair4_2 ] [ BC DE IX SP ];
+# attach variables [ rRegPair4_2 ] [ BC DE IY SP ];
+
+# ################################################################
+# # Macros
+# ################################################################
+
+# macro setResultFlags(result) {
+# 	$(Z_flag) = (result == 0);
+# 	$(S_flag) = (result s< 0);
+# }
+
+# macro setAddCarryFlags(op1,op2) {
+# 	$(C_flag) = (carry(op1,zext($(C_flag))) || carry(op2,op1 + zext($(C_flag))));
+# }
+
+# macro setAddFlags(op1,op2) {
+# 	$(C_flag) = carry(op1,op2);
+# }
+
+# macro setSubtractCarryFlags(op1,op2) {
+# 	notC = ~$(C_flag);
+# 	$(C_flag) = ((op1 < sext(notC)) || (op2 < (op1 - sext(notC))));
+# }
+
+# macro setSubtractFlags(op1,op2) {
+# 	$(C_flag) = (op1 < op2);
+# }
+
+# macro push16(val16) {
+# 	SP = SP - 2;
+# 	*:2 SP = val16; 
+# }
+
+# macro pop16(ret16) {
+# 	ret16 = *:2 SP;
+# 	SP = SP + 2; 
+# }
+
+# macro push8(val8) {
+# 	SP = SP - 1;
+# 	ptr:2 = SP;
+# 	*:1 ptr = val8; 
+# }
+
+# macro pop8(ret8) {
+#     ptr:2 = SP;
+# 	ret8 = *:1 ptr;
+# 	SP = SP + 1; 
+# }
+
+# ################################################################
+
+# ixMem8: (IX+simm8)  is IX & simm8								{ ptr:2 = IX + simm8; export *:1 ptr; }
+# ixMem8: (IX-val)    is IX & simm8 & sign8=1	[ val = -simm8; ]	{ ptr:2 = IX + simm8; export *:1 ptr; }
+
+# iyMem8: (IY+simm8)  is IY & simm8								{ ptr:2 = IY + simm8; export *:1 ptr; }
+# iyMem8: (IY-val)    is IY & simm8 & sign8=1	[ val = -simm8; ]	{ ptr:2 = IY + simm8; export *:1 ptr; }
+
+# Addr16: imm16		is imm16									{ export *:1 imm16; }
+
+# Mem16: (imm16)		is imm16									{ export *:2 imm16; }
+
+# RelAddr8: loc		is simm8  [ loc = inst_next + simm8; ]		{ export *:1 loc; }
+
+# cc: "NZ"            is bits3_3=0x0                              { c:1 = ($(Z_flag) == 0); export c; }
+# cc: "Z"             is bits3_3=0x1                              { c:1 = $(Z_flag); export c; }
+# cc: "NC"            is bits3_3=0x2                              { c:1 = ($(C_flag) == 0); export c; }
+# cc: "C"             is bits3_3=0x3                              { c:1 = $(C_flag); export c; }
+# cc: "PO"            is bits3_3=0x4                              { c:1 = ($(PV_flag) == 0); export c; }
+# cc: "PE"            is bits3_3=0x5                              { c:1 = $(PV_flag); export c; }
+# cc: "P"             is bits3_3=0x6                              { c:1 = ($(S_flag) == 0); export c; }
+# cc: "M"             is bits3_3=0x7                              { c:1 = $(S_flag); export c; }
+
+# cc2: "NZ"            is bits3_3=0x4                              { c:1 = ($(Z_flag) == 0); export c; }
+# cc2: "Z"             is bits3_3=0x5                              { c:1 = $(Z_flag); export c; }
+# cc2: "NC"            is bits3_3=0x6                              { c:1 = ($(C_flag) == 0); export c; }
+# cc2: "C"             is bits3_3=0x7                              { c:1 = $(C_flag); export c; }
+
+# ################################################################
+
+
+# :LD IX,Mem16  is op0_8=0xdd & IX; op0_8=0x2a; Mem16 {
+# 	IX = Mem16;
+# }
+
+# :LD IY,Mem16  is op0_8=0xfd & IY; op0_8=0x2a; Mem16 {
+# 	IY = Mem16;
+# }
+
+# :LD Mem16,HL  is op0_8=0x22 & HL; Mem16 {
+# 	Mem16 = HL;
+# }
+
+# :LD Mem16,dRegPair4_2  is op0_8=0xed; op6_2=0x1 & dRegPair4_2 & bits0_4=0x3; Mem16 {
+# 	Mem16 = dRegPair4_2;
+# }
+
+# :LD Mem16,IX  is op0_8=0xdd & IX; op0_8=0x22; Mem16 {
+# 	Mem16 = IX;
+# }
+
+# :LD Mem16,IY  is op0_8=0xfd & IY; op0_8=0x22; Mem16 {
+# 	Mem16 = IY;
+# }
+
+# :NEG  is op0_8=0xed; op0_8=0x44 {
+# 	$(PV_flag) = (A == 0x80);
+# 	$(C_flag) = (A != 0);
+# 	A = -A;
+# 	setResultFlags(A);
+# }
+
+# :SET bits3_3,ixMem8  is op0_8=0xdd; op0_8=0xcb; ixMem8; op6_2=0x3 & bits3_3 & bits0_3=0x6 {
+# 	mask:1 = (1 << bits3_3);
+# 	val:1 = ixMem8;
+# 	ixMem8 = val | mask;
+# }
+
+# :SET bits3_3,iyMem8  is op0_8=0xfd; op0_8=0xcb; iyMem8; op6_2=0x3 & bits3_3 & bits0_3=0x6 {
+# 	mask:1 = (1 << bits3_3);
+# 	val:1 = iyMem8;
+# 	iyMem8 = val | mask;
+# }
+
+# :JP Addr16  is op0_8=0xc3; Addr16 {
+# 	goto Addr16;	
+# }
+
+# :JP cc,Addr16  is op6_2=0x3 & cc & bits0_3=0x2; Addr16 {
+# 	if (!cc) goto Addr16;
+# }
+
+# :JR RelAddr8  is op0_8=0x18; RelAddr8 {
+# 	goto RelAddr8;
+# }
+
+# :JR cc2,RelAddr8  is op6_2=0x0 & cc2 & bits0_3=0x0; RelAddr8 {
+# 	if (cc2) goto RelAddr8;
+# }
+
+# :JP (HL)  is op0_8=0xe9 & HL {
+# 	goto [HL];
+# }
+
+# :JP (IX)  is op0_8=0xdd & IX; op0_8=0xe9 {
+# 	goto [IX];
+# }
+
+# :JP (IY)  is op0_8=0xfd & IY; op0_8=0xe9 {
+# 	goto [IY];
+# }
+
+# :CALL Addr16  is op0_8=0xcd; Addr16 {
+#     push16(&:2 inst_next);
+# 	call Addr16;
+# }
+
+# :CALL cc,Addr16  is op6_2=0x3 & cc & bits0_3=0x4; Addr16 {
+# 	if (!cc) goto inst_next;
+#     push16(&:2 inst_next);
+# 	call Addr16;
+# }
+
+# :RET  is op0_8=0xc9 {
+# 	pop16(PC);
+# 	ptr:2 = zext(PC);
+# 	return [ptr];
+# }
+
+# :RET cc  is op6_2=0x3 & cc & bits0_3=0x0 {
+# 	if (!cc) goto inst_next;
+# 	pop16(PC);
+# 	ptr:2 = zext(PC);
+# 	return [ptr];
+# }	

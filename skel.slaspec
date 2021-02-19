@@ -1,0 +1,62 @@
+# sleigh specification file for Skeleton Processor
+#   >> see docs/languages/sleigh.htm or sleigh.pdf for Sleigh syntax
+# Other language modules (see Ghidra/Processors) may provide better examples
+# when creating a new language module.
+
+define endian=big;
+define alignment=4;
+
+define space program       type=ram_space        size=4    default;
+define space register      type=register_space   size=4;
+
+# Per Thread Registers
+define register offset=0x000 size=4 [ D0 D1 D2 D3 D4 D5 D6 D7 D8 D9 D10 D11 D12 D13 D14 D15 ];
+define register offset=0x080 size=4 [ A0 A1 A2 A3 A4 A5 A6];
+define register offset=0x09C size=4 [ SP ];
+define register offset=0x0A0 size=4 [ ACC0_HI ACC0_LO MAC_RC16 SOURCE3 INST_CNT CSR ROSR IREAD_DATA INT_MASK0 INT_MASK1 ];
+define register offset=0x0D0 size=4 [ PC TRAP_CAUSE ACC1_HI ACC1_LO PREVIOUS_PC ];
+
+# Include contents of skel.sinc file
+@include "skel.sinc"
+
+
+
+
+
+
+
+
+
+
+
+# Global Registers
+# define register offset=0x100 size=4 [ CHIP_IDINT_STAT0 INT_STAT1 ];
+# define register offset=0x114 size=4 [ INT_SET0 INT_SET1 ];
+# define register offset=0x124 size=4 [ INT_CLR0 INT_CLR1 ];
+# define register offset=0x134 size=4 [ GLOBAL_CTRL MT_ACTIVE MT_ACTIVE_SET MT_ACTIVE_CLR MT_DBG_ACTIVE MT_DBG_ACTIVE_SET MT_EN MT_HPRI MT_HRT MT_BREAK MT_BREAK_CLR MT_SINGLE_STEP MT_MIN_DELAY_EN MT_BREAK_SET _ DCAPT ];
+# define register offset=0x17C size=4 [ MT_DBG_ACTIVE_CLR SCRATCHPAD0 SCRATCHPAD1 SCRATCHPAD2 SCRATCHPAD3 ];
+# define register offset=0x1A4 size=4 [ MT_I_BLOCKED MT_D_BLOCKED MT_I_BLOCKED_SET MT_D_BLOCKED_SET MT_BLOCKED_CLR MT_TRAP_EN MT_TRAP MT_TRAP_SET MT_TRAP_CLR ];
+# define register offset=0x200 size=4 [ I_RANGE0_HI I_RANGE1_HI I_RANGE2_HI ];
+# define register offset=0x220 size=4 [ I_RANGE0_LO I_RANGE1_LO I_RANGE2_LO ];
+# define register offset=0x240 size=4 [ I_RANGE0_EN I_RANGE1_EN I_RANGE2_EN ];
+# define register offset=0x260 size=4 [ D_RANGE0_HI D_RANGE1_HI D_RANGE2_HI D_RANGE3_HI];
+# define register offset=0x280 size=4 [ D_RANGE0_LO D_RANGE1_LO D_RANGE2_LO D_RANGE3_LO ];
+# define register offset=0x2A0 size=4 [ D_RANGE0_EN D_RANGE1_EN D_RANGE2_EN D_RANGE3_EN ];
+
+
+# Define context bits (if defined, size must be multiple of 4-bytes)
+# define register offset=0xf0 size=4   contextreg;
+
+# define context contextreg
+#   assume8bitIOSpace		= (0,0)
+# ;
+
+# Flag bits (?? manual is very confusing - could be typos!)
+# @define C_flag "F[0,1]"		# C: Carry
+# @define N_flag "F[1,1]"		# N: Add/Subtract
+# @define PV_flag "F[2,1]"	# PV: Parity/Overflow
+# @define H_flag "F[4,1]"		# H: Half Carry
+# @define Z_flag "F[6,1]"		# Z: Zero
+# @define S_flag "F[7,1]"		# S: Sign
+
+
