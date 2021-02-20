@@ -28,6 +28,12 @@ define token instr (32)
   opex_2 = (21, 25)
 
   f2_bitnumber = (11, 15)
+
+  f4_opex = (21, 25)
+  f4_data_register = (16, 19)
+  f4_ab_select = (26, 26)
+  f4a_bit_number_count = (11, 15)
+  f4b_s2_register = (11, 14)
   
   f6_imm         = (0, 15)
 
@@ -43,7 +49,7 @@ define token instr (32)
 ;
 
 attach variables [ f8_a d_register s1_register ] [ A0 A1 A2 A3 A4 A5 A6 SP ];
-attach variables [ d_data_register ] [ D0 D1 D2 D3 D4 D5 D6 D7 D8 D9 D10 D11 D12 D13 D14 D15 ];
+attach variables [ d_data_register f4b_s2_register ] [ D0 D1 D2 D3 D4 D5 D6 D7 D8 D9 D10 D11 D12 D13 D14 D15 ];
 
 @define N32       "CSR[7, 1]"  # N: Negative result (twos complement)
 @define Z32       "CSR[6, 1]"  # Z: Zero result
@@ -57,9 +63,11 @@ attach variables [ d_data_register ] [ D0 D1 D2 D3 D4 D5 D6 D7 D8 D9 D10 D11 D12
 
 @define IS_D_REGISTER "d_mode=1 & d_8bitdirect"
 @define IS_D_IMM      "d_mode=0 & d_8bitsigned"
+@define IS_D_VAL      "((d_mode=1 & d_8bitdirect) | (d_mode=0 & d_8bitsigned))"
 
 @define IS_S1_REGISTER "s1_mode=1 & s1_8bitdirect"
 @define IS_S1_IMM      "s1_mode=0 & s1_8bitsigned"
+@define IS_S1_VAL      "((s1_mode=1 & s1_8bitdirect) | (s1_mode=0 & s1_8bitsigned))"
 
 @define OP_2BYTE "opcode=0x0E | opcode=0x18 | opcode=0x0A | opcode=0x11 | opcode=0x0C | opcode=0x19 | (opcode=0x00 & ( opex_1=0x15 | opex_1=0x1D | opex_1=0x0D | opex_1=0x0B )) | (opcode=0x02 & ( opex_2=0x15 | opex_2=0x11 | opex_2=0x13 | opex_2=0x1E ))"
 @define OP_1BYTE "(opcode=0x00 & ( opex_1=0x1F | opex_1=0x17 | opex_1=0x0F )) | (opcode=0x02 & ( opex_2=0x08 | opex_2=0x1F ))"
@@ -184,9 +192,9 @@ with cc16 : f7_cc_select_bit=0 {
 
 # MOVE.4 d, s1
 with : opcode=0x00 & opex_1=0x0C {
-  :MOVE.4 d, s1   is d & s1 & $(IS_D_REGISTER) & $(IS_S1_IMM) { d = s1:4; }
+  :MOVE.4 d, s1   is d & s1 & $(IS_D_REGISTER) & $(IS_S1_VAL) { d = s1:4; }
   :MOVE.4 d, s1   is d & s1 & $(IS_D_REGISTER)                { d = *:4 s1:4; }
-  :MOVE.4 d, s1   is d & s1 & $(IS_S1_IMM)                    { *:4 d:4 = s1:4; }
+  :MOVE.4 d, s1   is d & s1 & $(IS_S1_VAL)                    { *:4 d:4 = s1:4; }
   :MOVE.4 d, s1   is d & s1                                   { *:4 d:4 = *:4 s1:4; }
 }
 
@@ -199,26 +207,62 @@ with : opcode=0x00 & opex_1=0x1C {
 
 # BSET, d, s1, #bitnumber
 with : opcode=0x04 {
-  :BSET d, s1, #f2_bitnumber   is d & s1 & f2_bitnumber & $(IS_D_REGISTER) & $(IS_S1_IMM) { 
+  :BSET d, s1, #f2_bitnumber   is d & s1 & f2_bitnumber & $(IS_D_REGISTER) & $(IS_S1_VAL) { 
     $(Z32) = ((s1:4 & (1 << f2_bitnumber)) == 0);
-    d = d:4 & (1 << f2_bitnumber);
+    d = d:4 | (1 << f2_bitnumber);
   }
   :BSET d, s1, #f2_bitnumber   is d & s1 & f2_bitnumber & $(IS_D_REGISTER) { 
     $(Z32) = ((*:4 s1:4 & (1 << f2_bitnumber)) == 0);
-    d = d:4 & (1 << f2_bitnumber);
+    d = d:4 | (1 << f2_bitnumber);
   }
-  :BSET d, s1, #f2_bitnumber   is d & s1 & f2_bitnumber & $(IS_S1_IMM) { 
+  :BSET d, s1, #f2_bitnumber   is d & s1 & f2_bitnumber & $(IS_S1_VAL) { 
     $(Z32) = ((s1:4 & (1 << f2_bitnumber)) == 0);
-    *:4 d = *:4 d:4 & (1 << f2_bitnumber);
+    *:4 d = *:4 d:4 | (1 << f2_bitnumber);
   }
   :BSET d, s1, #f2_bitnumber   is d & s1 & f2_bitnumber{ 
     $(Z32) = ((*:4 s1:4 & (1 << f2_bitnumber)) == 0);
-    *:4 d = *:4 d:4 & (1 << f2_bitnumber);
+    *:4 d = *:4 d:4 | (1 << f2_bitnumber);
   }
 }
 
+# BCLR, d, s1, #bitnumber
+with : opcode=0x05 {
+  :BCLR d, s1, #f2_bitnumber   is d & s1 & f2_bitnumber & $(IS_D_REGISTER) & $(IS_S1_VAL) { 
+    $(Z32) = ((s1:4 & (1 << f2_bitnumber)) == 0);
+    mask:4 = 1 << f2_bitnumber;
+    d = d:4 & (~mask);
+  }
+  :BCLR d, s1, #f2_bitnumber   is d & s1 & f2_bitnumber & $(IS_D_REGISTER) { 
+    $(Z32) = ((*:4 s1:4 & (1 << f2_bitnumber)) == 0);
+    mask:4 = 1 << f2_bitnumber;
+    d = d:4 & (~mask);
+  }
+  :BCLR d, s1, #f2_bitnumber   is d & s1 & f2_bitnumber & $(IS_S1_VAL) { 
+    $(Z32) = ((s1:4 & (1 << f2_bitnumber)) == 0);
+    mask:4 = 1 << f2_bitnumber;
+    *:4 d = *:4 d:4 & (~mask);
+  }
+  :BCLR d, s1, #f2_bitnumber   is d & s1 & f2_bitnumber{ 
+    $(Z32) = ((*:4 s1:4 & (1 << f2_bitnumber)) == 0);
+    mask:4 = 1 << f2_bitnumber;
+    *:4 d = *:4 d:4 & (~mask);
+  }
+}
+
+# BTST s1, #bit_num 
+with : opcode=0x02 & opex_2=0x06 & f4_ab_select=0 {
+  :BTST s1, #f4a_bit_number_count    is s1 & f4a_bit_number_count & $(IS_S1_VAL) { mask:4 = 1 << f4a_bit_number_count; $(Z32) = ((s1:4 & mask) == 0); }
+  :BTST s1, #f4a_bit_number_count    is s1 & f4a_bit_number_count                { mask:4 = 1 << f4a_bit_number_count; $(Z32) = ((*:4 s1:4 & mask) == 0); }
+}
+
+# BTST s1, Dn 
+with : opcode=0x02 & opex_2=0x06 & f4_ab_select=1 {
+  :BTST s1, f4b_s2_register    is s1 & f4b_s2_register & $(IS_S1_VAL) { mask:4 = 1 << f4b_s2_register; $(Z32) = ((s1:4 & mask) == 0); }
+  :BTST s1, f4b_s2_register    is s1 & f4b_s2_register                { mask:4 = 1 << f4b_s2_register; $(Z32) = ((*:4 s1:4 & mask) == 0); }
+}
+
 #JMP<cc>.P.C offset
-f8_dest: rel is f7_soff [ rel = inst_next + (f7_soff << 2); ] { export *:4 rel; }
+f8_dest: rel is f7_soff [ rel = inst_start + (f7_soff << 2); ] { export *:4 rel; }
 with : opcode=0x1A {
   :JMP^cc16".S.T" f8_dest     is f8_dest & cc16 & f7_cc_select_bit=0 & f7_prediction_bit=1 { if(cc16) goto f8_dest; }
   :JMP^cc16".S.F" f8_dest     is f8_dest & cc16 & f7_cc_select_bit=0 & f7_prediction_bit=0 { if(cc16) goto f8_dest; }
@@ -249,8 +293,6 @@ with : opcode=0x00 {
 
 
 
-:BCLR       is opcode=0x05 {}
-
 :AND.2      is opcode=0x08 {}
 :AND.4      is opcode=0x09 {}
 :OR.2       is opcode=0x0A {}
@@ -265,7 +307,6 @@ with : opcode=0x00 {
 :SUBC       is opcode=0x13 {}
 
 with : opcode=0x02 {
-  :BTST       is opex_2=0x06 {}
   :CRCGEN     is opex_2=0x08 {}
   :LSL.4      is opex_2=0x10 {}
   :LSL.2      is opex_2=0x11 {}
@@ -285,6 +326,8 @@ with : opcode=0x02 {
 
 
 :CALLI      is opcode=0x1E {}
+
+
 
 
 # MOVEI (Format 6)

@@ -4,6 +4,11 @@
 
 <processor_spec>
   <programcounter register="PC"/>
+  <default_symbols>
+    <symbol name="OCM_CFG" address="program:01000700" />
+    <symbol name="OCM_BIST_CFG" address="program:01000704" />
+    <symbol name="OCM_BIST_START" address="program:01000708" />
+  </default_symbols>
 
   <!-- 
     <default_symbols>
