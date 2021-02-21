@@ -264,6 +264,7 @@ with : opcode=0x02 & opex_2=0x06 & f4_ab_select=1 {
 #JMP<cc>.P.C offset
 f8_dest: rel is f7_soff [ rel = inst_start + (f7_soff << 2); ] { export *:4 rel; }
 with : opcode=0x1A {
+  :NOP                        is f8_dest & f7_cc_select_bit & f7_prediction_bit & f7_condition_bits=0xD & f7_soff=0x1 { }
   :JMP^cc16".S.T" f8_dest     is f8_dest & cc16 & f7_cc_select_bit=0 & f7_prediction_bit=1 { if(cc16) goto f8_dest; }
   :JMP^cc16".S.F" f8_dest     is f8_dest & cc16 & f7_cc_select_bit=0 & f7_prediction_bit=0 { if(cc16) goto f8_dest; }
   :JMP^cc32".W.T" f8_dest     is f8_dest & cc32 & f7_cc_select_bit=1 & f7_prediction_bit=1 { if(cc32) goto f8_dest; }
