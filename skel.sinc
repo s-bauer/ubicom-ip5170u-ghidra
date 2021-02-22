@@ -42,13 +42,20 @@ define token instr (32)
   f7_cc_select_bit   = (21, 21)
   f7_soff            = (0, 20) signed
 
+  f8_value_s_21_23 = (24, 26) signed
   f8_value_21_23 = (24, 26)
   f8_value_0_20  = (0, 20)
   f8_a           = (21, 23)
 
+  f9_offset_13_15 = (24, 26)
+  f9_offset_8_12  = (16, 20)
+  f9_offset_5_7   = (8, 10)
+  f9_offset_0_4   = (0, 4)
+  f9_register_1   = (21, 23)
+  f9_register_2   = (5, 7)
 ;
 
-attach variables [ f8_a d_register s1_register ] [ A0 A1 A2 A3 A4 A5 A6 SP ];
+attach variables [ f8_a d_register s1_register f9_register_1 f9_register_2 ] [ A0 A1 A2 A3 A4 A5 A6 SP ];
 attach variables [ d_data_register f4b_s2_register ] [ D0 D1 D2 D3 D4 D5 D6 D7 D8 D9 D10 D11 D12 D13 D14 D15 ];
 
 @define N32       "CSR[7, 1]"  # N: Negative result (twos complement)
@@ -325,8 +332,15 @@ with : opcode=0x02 {
 
 :CMPI       is opcode=0x18 {}
 
+# CALLI (Format 9)
+f9_dest: offset(f9_register_2)   is f9_register_2 & f9_offset_13_15 & f9_offset_8_12 & f9_offset_5_7 & f9_offset_0_4 [ 
+  offset = ((f9_offset_13_15 << 14) + (f9_offset_8_12 << 9) + (f9_offset_5_7 << 6) + f9_offset_0_4) << 2;
+] { tmp:4 = f9_register_2 + offset:4; export *:4 tmp; }
 
-:CALLI      is opcode=0x1E {}
+:CALLI f9_register_1, f9_dest  is opcode=0x1E & f9_register_1 & f9_dest {
+  f9_register_1 = inst_next;
+  return [f9_dest];
+}
 
 
 
@@ -341,13 +355,13 @@ with : opcode=0x19 {
 # MOVEAI (Format 8)
 
 f8_value: "#"calc_addr  is opcode=0x1C & f8_value_21_23 & f8_value_0_20  [ calc_addr = (f8_value_21_23 << 28) + (f8_value_0_20 << 7); ] { export calc_addr; }
-:MOVEAI f8_a,f8_value   is opcode=0x1C & f8_a & f8_value { f8_a = f8_value; }
+:MOVEAI f8_a, f8_value  is opcode=0x1C & f8_a & f8_value { f8_a = f8_value; }
 
 
 # CALL (Format 8)
 
-f8_value: "#"offset     is opcode=0x1B & f8_value_21_23 & f8_value_0_20 [ offset = inst_start + (((f8_value_21_23 << 20) + f8_value_0_20) << 2); ] { export *:4 offset; }
-:CALL   f8_a,f8_value   is opcode=0x1B & f8_a & f8_value { f8_a = inst_next; call [f8_value]; }
+f8_value: "#"calc_addr  is opcode=0x1B & f8_value_s_21_23 & f8_value_0_20 [ calc_addr = inst_start + (((f8_value_s_21_23 << 21) + f8_value_0_20) << 2); ] { export calc_addr; }
+:CALL f8_a, f8_value  is opcode=0x1B & f8_a & f8_value { f8_a = inst_next; call [f8_value]; }
 
 
 
